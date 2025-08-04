@@ -1,10 +1,9 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useMap } from 'react-leaflet';
 import L, { Polygon as LeafletPolygon } from 'leaflet';
-import type { LeafletMouseEvent } from 'leaflet';
 import 'leaflet-draw';
 import { useDispatch, useSelector } from 'react-redux';
-import { addPolygon, removePolygon } from '../../store/polygonsSlice';
+import { addPolygon, deletePolygon } from '../../store/polygonsSlice';
 import type { RootState } from '../../store/index';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -30,13 +29,16 @@ const PolygonDrawer: React.FC = () => {
   const map = useMap();
   const dispatch = useDispatch();
 
-  const mode = useSelector((state: RootState) => state.timeline.mode);
-  const selected = useSelector((state: RootState) => state.timeline.selected);
+  const selectedDate = useSelector((state: RootState) => state.timeline.selectedDate);
+  const polygons = useSelector((state: RootState) => state.polygons.list);
+
+  const drawnItemsRef = useRef<L.FeatureGroup | null>(null);
 
   useEffect(() => {
     if (!map) return;
 
     const drawnItems = new L.FeatureGroup();
+    drawnItemsRef.current = drawnItems;
     map.addLayer(drawnItems);
 
     const drawControl = new L.Control.Draw({
@@ -96,12 +98,7 @@ const PolygonDrawer: React.FC = () => {
           rules: [],
         };
 
-        if (mode === 'single') {
-          payload.time = selected as string;
-        } else if (mode === 'range') {
-          const [start, end] = (selected as string).split(',');
-          payload.timeRange = { start, end };
-        }
+       
 
         dispatch(addPolygon(payload));
       } else {
@@ -116,7 +113,7 @@ const PolygonDrawer: React.FC = () => {
         const polygonId = layer.polygonId;
 
         if (polygonId) {
-          dispatch(removePolygon(polygonId));
+          dispatch(deletePolygon(polygonId));
         }
 
         drawnItems.removeLayer(layer);
@@ -126,7 +123,26 @@ const PolygonDrawer: React.FC = () => {
     return () => {
       map.removeControl(drawControl);
     };
-  }, [map, dispatch, mode, selected]);
+  }, [map, dispatch, selectedDate]);
+
+  // 🔁 Sync polygons from Redux to map
+  useEffect(() => {
+    const drawnItems = drawnItemsRef.current;
+    if (!drawnItems) return;
+
+    drawnItems.clearLayers(); // remove previous polygons
+
+    polygons.forEach((polygon) => {
+      const latlngs = polygon.coordinates.map((pt) => [pt.lat, pt.lng]) as [number, number][];
+      const layer = L.polygon(latlngs, {
+        color: '#0077ff',
+        weight: 2,
+        fillOpacity: 0.4,
+      });
+      (layer as any).polygonId = polygon.id;
+      drawnItems.addLayer(layer);
+    });
+  }, [polygons]);
 
   return null;
 };

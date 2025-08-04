@@ -58,7 +58,6 @@ const polygonsSlice = createSlice({
         Object.assign(polygon, updates);
       }
     },
-
     updatePolygonTime: (
       state,
       action: PayloadAction<{ id: string; time: string }>
@@ -89,8 +88,9 @@ const polygonsSlice = createSlice({
         polygon.currentColor = action.payload.color;
       }
     },
-    removePolygon: (state, action: PayloadAction<string>) => {
-      state.list = state.list.filter(p => p.id !== action.payload);
+    // Add this to reducers:
+    deletePolygon: (state, action: PayloadAction<string>) => {
+      state.list = state.list.filter(polygon => polygon.id !== action.payload);
     },
     clearPolygons: (state) => {
       state.list = [];
@@ -116,7 +116,7 @@ export const {
   updatePolygonTime,
   updatePolygonTimeRange,
   updatePolygonValue,
-  removePolygon,
+  deletePolygon,
   clearPolygons,
   setPolygonTemperatureSeries,
 } = polygonsSlice.actions;

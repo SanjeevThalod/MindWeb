@@ -1,66 +1,41 @@
-import React from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import type { RootState } from '../../store';
-import { setSelectedTime } from '../../store/timelineSlice';
-import './TimelineSlider.css';
+import { setDate, setTime } from '../../store/timelineSlice';
+import "./TimelineSlider.css"
 
-const TimelineSlider: React.FC = () => {
+const dateRange = Array.from({ length: 31 }, (_, i) => {
+  const date = new Date();
+  date.setDate(date.getDate() - 15 + i);
+  return date.toISOString().split('T')[0]; // "YYYY-MM-DD"
+});
+
+const timeRange = Array.from({ length: 24 }, (_, i) => `${i}:00`);
+
+const TimelineSlider = () => {
   const dispatch = useDispatch();
-  const { selected, mode } = useSelector((state: RootState) => state.timeline);
-
-  // Generate 24 hourly timestamps for today
-  const today = new Date();
-  const hours = Array.from({ length: 24 }, (_, i) => {
-    const date = new Date(today);
-    date.setHours(i, 0, 0, 0);
-    return date;
-  });
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const hourIndex = parseInt(e.target.value, 10);
-    const selectedHour = hours[hourIndex].toISOString();
-
-    if (mode === 'single') {
-      dispatch(setSelectedTime(selectedHour));
-    } else if (mode === 'range' && Array.isArray(selected)) {
-      // For range mode, update only the *end* time for simplicity here
-      dispatch(setSelectedTime([selected[0], selectedHour]));
-    }
-  };
-
-  // Determine current index for slider handle
-  const getSelectedHourIndex = () => {
-    let selectedTime: string;
-
-    if (mode === 'single' && typeof selected === 'string') {
-      selectedTime = selected;
-    } else if (mode === 'range' && Array.isArray(selected)) {
-      selectedTime = selected[1]; // Use end time for slider in range mode
-    } else {
-      return 0;
-    }
-
-    const selectedHour = new Date(selectedTime).getHours();
-    return hours.findIndex((h) => h.getHours() === selectedHour);
-  };
-
-  const currentHourIndex = getSelectedHourIndex();
-  const currentLabel = hours[currentHourIndex]?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const selectedDate = useSelector((state: RootState) => state.timeline.selectedDate);
+  const selectedTime = useSelector((state: RootState) => state.timeline.selectedTime);
 
   return (
-    <div className="timeline-slider-container">
-      <label htmlFor="timeline">
-        {mode === 'single' ? 'Selected Hour' : 'End Hour'}: {currentLabel}
-      </label>
+    <div className="timeline-slider-ui">
+      <p>
+        <span className='bold'>Selected: </span> {selectedDate} <span className='bold'>@ </span> {selectedTime}
+      </p>
+      <label>Date: <span className='bold'>{selectedDate}</span></label>
       <input
         type="range"
-        id="timeline"
-        min="0"
-        max="23"
-        step="1"
-        value={currentHourIndex}
-        onChange={handleChange}
-        className="timeline-slider"
+        min={0}
+        max={30}
+        value={Math.max(0, dateRange.indexOf(selectedDate))}
+        onChange={(e) => dispatch(setDate(dateRange[+e.target.value]))}
+      />
+      <label>Time: <span className='bold'>{selectedTime}</span></label>
+      <input
+        type="range"
+        min={0}
+        max={23}
+        value={selectedTime ? parseInt(selectedTime.split(':')[0]) : 0}
+        onChange={(e) => dispatch(setTime(`${e.target.value}:00`))}
       />
     </div>
   );

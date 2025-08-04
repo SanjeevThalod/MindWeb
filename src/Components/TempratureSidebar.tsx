@@ -3,19 +3,26 @@ import type { RootState } from '../store';
 
 const PolygonInfoPanel = () => {
   const polygons = useSelector((state: RootState) => state.polygons.list);
-  const { selected } = useSelector((state: RootState) => state.timeline);
+  const { selectedDate, selectedTime } = useSelector((state: RootState) => state.timeline);
+
+
 
   return (
     <div className='temperature-sidebar'>
       {polygons.map((poly) => {
-        const selectedTime = typeof selected === 'string' ? selected : null;
+        const selectedHourStr =
+          selectedDate && selectedTime
+            ? `${selectedDate}T${selectedTime.padStart(5, '0')}`.slice(0, 13)
+            : null;
+
 
         // Find temperature at selected time (round to hour)
-        const matchedEntry = selectedTime
+        const matchedEntry = selectedHourStr
           ? poly.temperatureSeries?.find((entry) =>
-              entry.time.startsWith(selectedTime.slice(0, 13))
-            )
+            entry.time.startsWith(selectedHourStr)
+          )
           : null;
+
 
         return (
           <div key={poly.id} className="polygon-entry">

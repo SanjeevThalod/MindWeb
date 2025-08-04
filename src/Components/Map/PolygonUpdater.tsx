@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import type { RootState } from '../../store';
-import { updatePolygon, setPolygonTemperatureSeries } from '../../store/polygonsSlice';
+import { updatePolygon } from '../../store/polygonsSlice';
 import type { PolygonData, ColorRule } from '../../store/polygonsSlice';
 
 type TempCacheEntry = {
@@ -11,153 +11,128 @@ type TempCacheEntry = {
 
 const PolygonUpdater = () => {
   const dispatch = useDispatch();
+
+  // Selectors
   const polygons = useSelector((state: RootState) => state.polygons.list);
   const rules = useSelector((state: RootState) => state.colorRules);
-  const { mode, selected } = useSelector((state: RootState) => state.timeline);
+  const selectedDate = useSelector((state: RootState) => state.timeline.selectedDate);
+  const selectedTime = useSelector((state: RootState) => state.timeline.selectedTime);
 
+  // Cache
   const tempCache = useRef<Map<string, TempCacheEntry>>(new Map());
 
-  const fetchTemperatureSeries = async (
-    lat: number,
-    lng: number,
-    startDate: string,
-    endDate: string
-  ): Promise<TempCacheEntry | null> => {
-    const cacheKey = `${lat}-${lng}-${startDate}-${endDate}`;
+  const fetchFull30DaySeries = async (lat: number, lng: number): Promise<TempCacheEntry | null> => {
+    const today = new Date();
+    const startPast = new Date(today);
+    startPast.setDate(today.getDate() - 14);
 
+    const todayStr = today.toISOString().slice(0, 10);
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().slice(0, 10);
+
+    const endFuture = new Date(today);
+    endFuture.setDate(today.getDate() + 15);
+
+    const startPastStr = startPast.toISOString().slice(0, 10);
+    const endFutureStr = endFuture.toISOString().slice(0, 10);
+
+
+    const cacheKey = `${lat}-${lng}-${startPastStr}-${endFutureStr}`;
     if (tempCache.current.has(cacheKey)) {
       return tempCache.current.get(cacheKey)!;
     }
 
     try {
-      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&hourly=temperature_2m&start_date=${startDate}&end_date=${endDate}&timezone=auto`;
-      const res = await fetch(url);
-      const data = await res.json();
+      const pastUrl = `https://archive-api.open-meteo.com/v1/era5?latitude=${lat}&longitude=${lng}&start_date=${startPastStr}&end_date=${yesterdayStr}&hourly=temperature_2m&models=best_match&timezone=auto`;
+      const futureUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&start_date=${todayStr}&end_date=${endFutureStr}&hourly=temperature_2m&timezone=auto`;
 
-      if (!data.hourly?.time || !data.hourly?.temperature_2m) return null;
+      const [pastRes, futureRes] = await Promise.all([fetch(pastUrl), fetch(futureUrl)]);
+      const pastData = await pastRes.json();
+      const futureData = await futureRes.json();
+
+      console.log(pastData);
+      console.log(futureData)
+
+      const allTime = [...(pastData.hourly?.time ?? []), ...(futureData.hourly?.time ?? [])];
+      const allValues = [...(pastData.hourly?.temperature_2m ?? []), ...(futureData.hourly?.temperature_2m ?? [])];
+
+      if (allTime.length === 0 || allValues.length === 0) return null;
 
       const entry: TempCacheEntry = {
-        time: data.hourly.time,
-        values: data.hourly.temperature_2m,
+        time: allTime,
+        values: allValues,
       };
 
       tempCache.current.set(cacheKey, entry);
       return entry;
     } catch (err) {
-      console.error('Failed to fetch temp series:', err);
+      console.error('Failed to fetch 30-day temp series:', err);
       return null;
     }
   };
 
-
   const evaluateRule = (value: number): string => {
     for (const rule of rules) {
-      if (value >= rule.min && value < rule.max) return rule.color;
+      if (value >= rule.min && value < rule.max) {
+        return rule.color;
+      }
     }
     return '#888'; // fallback
   };
 
-  const updateAllPolygons = async () => {
-    for (const polygon of polygons) {
-      const { lat, lng } = polygon.centroid;
+  useEffect(() => {
+    if (!selectedDate || selectedTime === null) return;
 
-      if (mode === 'single') {
-        const isoTime = selected as string;
-        const dateStr = isoTime.slice(0, 10);
-        const hourStr = isoTime.slice(0, 13); // YYYY-MM-DDTHH
+    const isoTime = `${selectedDate}T${selectedTime}`;
+    const hourStr = isoTime.slice(0, 13); // still fine for matching "YYYY-MM-DDTHH"
 
-        const cached = await fetchTemperatureSeries(lat, lng, dateStr, dateStr);
+
+    const update = async () => {
+      for (const polygon of polygons) {
+        const { lat, lng } = polygon.centroid;
+
+        const cached = await fetchFull30DaySeries(lat, lng);
         if (!cached) continue;
 
         const index = cached.time.findIndex((t) => t.startsWith(hourStr));
-        if (index === -1) continue;
+        if (index === -1) {
+          console.warn(`Hour not found: ${hourStr} in cached data`);
+          continue;
+        }
 
         const value = cached.values[index];
         const color = evaluateRule(value);
 
-        if (!cached) {
-          console.warn("No cached data");
-          continue;
-        }
+        const temperatureSeries = cached.time.map((t, i) => ({
+          time: t,
+          value: cached.values[i],
+        }));
 
-        if (index === -1) {
-          console.warn("Time index not found");
-          continue;
-        }
-
-
-        // Only dispatch if changed
-        if (
+        const needsUpdate =
           polygon.currentValue !== value ||
           polygon.currentColor !== color ||
           polygon.time !== isoTime ||
           !polygon.temperatureSeries ||
-          polygon.temperatureSeries.length !== cached.time.length
-        ) {
-          const temperatureSeries = cached.time.map((t, i) => ({
-            time: t,
-            value: cached.values[i],
-          }));
+          polygon.temperatureSeries.length !== cached.time.length;
 
+        if (needsUpdate) {
           dispatch(updatePolygon({
             id: polygon.id,
             updates: {
               currentValue: value,
               currentColor: color,
               time: isoTime,
-              timeRange: undefined,
               temperatureSeries,
-            }
+            },
           }));
-
         }
       }
+    };
 
-      // range of time, will implement later
+    update();
 
-      // if (
-      //   mode === 'range' &&
-      //   typeof selected === 'object' &&
-      //   selected !== null &&
-      //   'start' in selected &&
-      //   'end' in selected
-      // ) {
-      //   const { start, end } = selected;
-      //   const startDate = start.slice(0, 10);
-      //   const endDate = end.slice(0, 10);
-
-      //   const cached = await fetchTemperatureSeries(lat, lng, startDate, endDate);
-      //   if (!cached) continue;
-
-      //   const filteredSeries = cached.time
-      //     .map((t, i) => ({ time: t, value: cached.values[i] }))
-      //     .filter(({ time }) => time >= start && time <= end);
-
-      //   if (filteredSeries.length === 0) continue;
-
-      //   const avg = filteredSeries.reduce((sum, d) => sum + d.value, 0) / filteredSeries.length;
-      //   const color = evaluateRule(polygon.rules || [], avg);
-
-      //   dispatch(updatePolygon({
-      //     ...polygon,
-      //     currentValue: avg,
-      //     currentColor: color,
-      //     time: undefined,
-      //     timeRange: { start, end },
-      //   }));
-
-      //   dispatch(setPolygonTemperatureSeries({
-      //     id: polygon.id,
-      //     temperatures: filteredSeries,
-      //   }));
-      // }
-    }
-  };
-
-
-  useEffect(() => {
-    updateAllPolygons();
-  }, [mode, selected, polygons, rules]);
+  }, [selectedDate, selectedTime, polygons, rules, dispatch]);
 
   return null;
 };

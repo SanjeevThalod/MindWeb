@@ -2,12 +2,11 @@ import React from 'react';
 import { MapContainer, TileLayer } from 'react-leaflet';
 import './mapStyles.css';
 import PolygonDrawer from './PolygonDrawer';
-import PolygonDisplay from './PolygonDisplay';
 import PolygonUpdater from './PolygonUpdater';
 import PolygonRenderer from './PolygonRenderer';
 import TimelineSlider from '../TimelineSlider/TimelineSlider';
 import TemperatureSidebar from '../TempratureSidebar';
-import ColorRuleEditor from '../colorRuleEditor';
+import ColorRuleEditor from '../ColorRuleEditor';
 import ZoomButtons from './ZoomButtons';
 
 const DEFAULT_CENTER: [number, number] = [28.6139, 77.2090];

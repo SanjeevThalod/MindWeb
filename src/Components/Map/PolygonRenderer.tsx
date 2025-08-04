@@ -1,9 +1,11 @@
-import { useSelector } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { Polygon, useMap, Tooltip } from 'react-leaflet';
 import type { RootState } from '../../store/index';
 import { useEffect } from 'react';
+import { deletePolygon } from '../../store/polygonsSlice';
 
 const PolygonRenderer = () => {
+  const dispatch = useDispatch();
   const map = useMap();
   const polygons = useSelector((state: RootState) => state.polygons.list);
 
@@ -26,15 +28,21 @@ const PolygonRenderer = () => {
           }}
         >
           <Tooltip sticky direction='top' >
-            <div style={{backgroundColor:`${polygon.currentColor}`}}>
+            <div style={{ backgroundColor: `${polygon.currentColor}` }}>
               <strong>Polygon ID:</strong> {polygon.id}<br />
               <strong >Color:</strong> {polygon.currentColor}
             </div>
           </Tooltip>
-          </Polygon >
+          {/* <button
+            onClick={() => dispatch(deletePolygon(polygon.id))}
+            style={{ color: 'white', background: 'red', border: 'none', padding: '4px 8px', cursor: 'pointer' }}
+          >
+            Delete
+          </button> */}
+        </Polygon >
       ))}
-        </>
-      );
+    </>
+  );
 };
 
-      export default PolygonRenderer;
+export default PolygonRenderer;

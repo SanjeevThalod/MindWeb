@@ -7,14 +7,20 @@
   overflow: hidden;
   box-sizing: border-box;
   padding: 3rem 5rem;
+  border-radius: 20px;
 }
 
 /* Timeline on top */
 .timeline-slider {
   z-index: 1000;
-  background: white;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
-  padding: 0.5rem 0rem;
+  padding: 1.5rem;
+  background: #f7f9fc;
+  border-radius: 12px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+  width: 100%;
+  margin: 1rem auto;
+  font-family: 'Segoe UI', sans-serif;
+  color: #333;
   box-sizing: border-box;
 }
 
@@ -28,6 +34,8 @@
   padding: 0%;
   max-height: 100vh;
   min-height: 100vh;
+  border-radius: 15px;
+  overflow: hidden;
 }
 
 /* Map container (inside MapContainer) */
