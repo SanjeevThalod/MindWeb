@@ -1,0 +1,73 @@
+/* Make the whole app take full screen */
+.map-wrapper {
+  display: flex;
+  flex-direction: column;
+  /* height: 200vh; */
+  width: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
+  padding: 3rem 5rem;
+}
+
+/* Timeline on top */
+.timeline-slider {
+  z-index: 1000;
+  background: white;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+  padding: 0.5rem 0rem;
+  box-sizing: border-box;
+}
+
+/* Main content: map + sidebar */
+.map-main {
+  flex: 1;
+  display: flex;
+  width: 100%;
+  position: relative;
+  box-sizing: border-box;
+  padding: 0%;
+  max-height: 100vh;
+  min-height: 100vh;
+}
+
+/* Map container (inside MapContainer) */
+.map-area {
+  flex: 1;
+  position: relative;
+  z-index: 1;
+  box-sizing: border-box;
+}
+
+/* Sidebar next to map */
+.temperature-sidebar {
+  width: 250px;
+  background: white;
+  border-left: 1px solid #ccc;
+  padding: 1rem;
+  overflow-y: scroll;
+  max-height: 100%;
+  font-family: sans-serif;
+  box-shadow: -2px 0 5px rgba(0, 0, 0, 0.1);
+  z-index: 2;
+
+}
+
+.polygon-entry{
+  margin: 20px 0px;
+  border-bottom: 1px solid gray;
+}
+
+/* Responsive behavior */
+@media (max-width: 768px) {
+  .map-main {
+    flex-direction: column;
+  }
+
+  .temperature-sidebar {
+    width: 100%;
+    height: auto;
+    border-left: none;
+    border-top: 1px solid #ccc;
+    box-shadow: 0 -2px 5px rgba(0, 0, 0, 0.1);
+  }
+}
