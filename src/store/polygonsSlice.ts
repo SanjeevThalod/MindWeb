@@ -19,7 +19,7 @@ export type PolygonData = {
   id: string;
   coordinates: LatLng[];
   centroid: LatLng;
-  dataSource: 'open-meteo';
+  dataSource: string;
   variable: string; // e.g., 'temperature_2m'
   rules: ColorRule[];
 
@@ -49,15 +49,21 @@ const polygonsSlice = createSlice({
   initialState,
   reducers: {
     addPolygon: (state, action: PayloadAction<PolygonData>) => {
-      state.list.push(action.payload);
-    },
-    updatePolygon: (state, action: PayloadAction<{ id: string, updates: Partial<PolygonData> }>) => {
-      const { id, updates } = action.payload;
-      const polygon = state.list.find(p => p.id === id);
-      if (polygon) {
-        Object.assign(polygon, updates);
+      const exists = state.list.find(p => p.id === action.payload.id);
+      if (!exists) {
+        state.list.push(action.payload);
       }
     },
+    updatePolygon: (state, action: PayloadAction<{ id: string, updates: Partial<PolygonData> }>) => {
+      const index = state.list.findIndex(p => p.id === action.payload.id);
+      if (index !== -1) {
+        state.list[index] = {
+          ...state.list[index],
+          ...action.payload.updates,
+        };
+      }
+    }
+    ,
     updatePolygonTime: (
       state,
       action: PayloadAction<{ id: string; time: string }>

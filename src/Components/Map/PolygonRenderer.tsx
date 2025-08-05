@@ -27,18 +27,12 @@ const PolygonRenderer = () => {
             weight: 2,
           }}
         >
-          <Tooltip sticky direction='top' >
+          {/* <Tooltip sticky direction='top' >
             <div style={{ backgroundColor: `${polygon.currentColor}` }}>
               <strong>Polygon ID:</strong> {polygon.id}<br />
               <strong >Color:</strong> {polygon.currentColor}
             </div>
-          </Tooltip>
-          {/* <button
-            onClick={() => dispatch(deletePolygon(polygon.id))}
-            style={{ color: 'white', background: 'red', border: 'none', padding: '4px 8px', cursor: 'pointer' }}
-          >
-            Delete
-          </button> */}
+          </Tooltip> */}
         </Polygon >
       ))}
     </>

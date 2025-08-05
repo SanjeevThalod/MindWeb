@@ -2,8 +2,8 @@ import { createSlice } from '@reduxjs/toolkit';
 import type { PayloadAction } from '@reduxjs/toolkit';
 
 interface TimelineState {
-  selectedDate: string;
-  selectedTime: string;
+  selectedDateRange: [string, string];
+  selectedTimeRange: [string, string];
 }
 
 const today = new Date();
@@ -11,22 +11,22 @@ const defaultDate = today.toISOString().split('T')[0];
 const defaultTime = `${today.getHours()}:00`;
 
 const initialState: TimelineState = {
-  selectedDate: defaultDate,
-  selectedTime: defaultTime,
+  selectedDateRange: [defaultDate, defaultDate],
+  selectedTimeRange: [defaultTime, defaultTime],
 };
 
 const timelineSlice = createSlice({
   name: 'timeline',
   initialState,
   reducers: {
-    setDate(state, action: PayloadAction<string>) {
-      state.selectedDate = action.payload;
+    setDateRange(state, action: PayloadAction<[string, string]>) {
+      state.selectedDateRange = action.payload;
     },
-    setTime(state, action: PayloadAction<string>) {
-      state.selectedTime = action.payload;
+    setTimeRange(state, action: PayloadAction<[string, string]>) {
+      state.selectedTimeRange = action.payload;
     },
   },
 });
 
-export const { setDate, setTime } = timelineSlice.actions;
+export const { setDateRange, setTimeRange } = timelineSlice.actions;
 export default timelineSlice.reducer;

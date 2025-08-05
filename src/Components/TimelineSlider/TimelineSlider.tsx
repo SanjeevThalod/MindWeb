@@ -1,42 +1,106 @@
 import { useDispatch, useSelector } from 'react-redux';
+import { Range, getTrackBackground } from 'react-range';
+import { setDateRange, setTimeRange } from '../../store/timelineSlice';
 import type { RootState } from '../../store';
-import { setDate, setTime } from '../../store/timelineSlice';
-import "./TimelineSlider.css"
+import './TimelineSlider.css';
 
-const dateRange = Array.from({ length: 31 }, (_, i) => {
-  const date = new Date();
-  date.setDate(date.getDate() - 15 + i);
-  return date.toISOString().split('T')[0]; // "YYYY-MM-DD"
+const TOTAL_DAYS = 31;
+const TOTAL_HOURS = 24;
+
+const dateRange = Array.from({ length: TOTAL_DAYS }, (_, i) => {
+  const d = new Date();
+  d.setDate(d.getDate() - 15 + i);
+  return d.toISOString().split('T')[0];
 });
-
-const timeRange = Array.from({ length: 24 }, (_, i) => `${i}:00`);
 
 const TimelineSlider = () => {
   const dispatch = useDispatch();
-  const selectedDate = useSelector((state: RootState) => state.timeline.selectedDate);
-  const selectedTime = useSelector((state: RootState) => state.timeline.selectedTime);
+  const { selectedDateRange, selectedTimeRange } = useSelector((state: RootState) => state.timeline);
+
+  const dateStart = dateRange.indexOf(selectedDateRange[0]);
+  const dateEnd = dateRange.indexOf(selectedDateRange[1]);
+  const timeStart = parseInt(selectedTimeRange[0]);
+  const timeEnd = parseInt(selectedTimeRange[1]);
+
+  const updateDateRange = ([start, end]: number[]) => {
+    dispatch(setDateRange([dateRange[start], dateRange[end]]));
+  };
+
+  const updateTimeRange = ([start, end]: number[]) => {
+    dispatch(setTimeRange([`${start}:00`, `${end}:00`]));
+  };
 
   return (
-    <div className="timeline-slider-ui">
-      <p>
-        <span className='bold'>Selected: </span> {selectedDate} <span className='bold'>@ </span> {selectedTime}
-      </p>
-      <label>Date: <span className='bold'>{selectedDate}</span></label>
-      <input
-        type="range"
-        min={0}
-        max={30}
-        value={Math.max(0, dateRange.indexOf(selectedDate))}
-        onChange={(e) => dispatch(setDate(dateRange[+e.target.value]))}
-      />
-      <label>Time: <span className='bold'>{selectedTime}</span></label>
-      <input
-        type="range"
-        min={0}
-        max={23}
-        value={selectedTime ? parseInt(selectedTime.split(':')[0]) : 0}
-        onChange={(e) => dispatch(setTime(`${e.target.value}:00`))}
-      />
+    <div className="timeline-slider-container">
+      <div className="slider-section">
+        <label>Date Range:</label>
+        <Range
+          values={[dateStart, dateEnd]}
+          step={1}
+          min={0}
+          max={TOTAL_DAYS - 1}
+          onChange={updateDateRange}
+          renderTrack={({ props, children }) => (
+            <div
+              {...props}
+              className="track"
+              style={{
+                ...props.style,
+                background: getTrackBackground({
+                  values: [dateStart, dateEnd],
+                  colors: ['#ccc', '#0077ff', '#ccc'],
+                  min: 0,
+                  max: TOTAL_DAYS - 1,
+                }),
+              }}
+            >
+              {children}
+            </div>
+          )}
+          renderThumb={({ index, props }) => (
+            <div {...props} className="thumb">
+              <div className="thumb-label">
+                {dateRange[[dateStart, dateEnd][index]]}
+              </div>
+            </div>
+          )}
+        />
+      </div>
+
+      <div className="slider-section">
+        <label>Time Range:</label>
+        <Range
+          values={[timeStart, timeEnd]}
+          step={1}
+          min={0}
+          max={23}
+          onChange={updateTimeRange}
+          renderTrack={({ props, children }) => (
+            <div
+              {...props}
+              className="track"
+              style={{
+                ...props.style,
+                background: getTrackBackground({
+                  values: [timeStart, timeEnd],
+                  colors: ['#ccc', '#0077ff', '#ccc'],
+                  min: 0,
+                  max: 23,
+                }),
+              }}
+            >
+              {children}
+            </div>
+          )}
+          renderThumb={({ index, props }) => (
+            <div {...props} className="thumb">
+              <div className="thumb-label">
+                {[timeStart, timeEnd][index]}:00
+              </div>
+            </div>
+          )}
+        />
+      </div>
     </div>
   );
 };

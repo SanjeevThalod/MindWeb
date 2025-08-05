@@ -12,13 +12,10 @@ type TempCacheEntry = {
 const PolygonUpdater = () => {
   const dispatch = useDispatch();
 
-  // Selectors
   const polygons = useSelector((state: RootState) => state.polygons.list);
   const rules = useSelector((state: RootState) => state.colorRules);
-  const selectedDate = useSelector((state: RootState) => state.timeline.selectedDate);
-  const selectedTime = useSelector((state: RootState) => state.timeline.selectedTime);
+  const { selectedDateRange, selectedTimeRange } = useSelector((state: RootState) => state.timeline);
 
-  // Cache
   const tempCache = useRef<Map<string, TempCacheEntry>>(new Map());
 
   const fetchFull30DaySeries = async (lat: number, lng: number): Promise<TempCacheEntry | null> => {
@@ -26,17 +23,15 @@ const PolygonUpdater = () => {
     const startPast = new Date(today);
     startPast.setDate(today.getDate() - 14);
 
-    const todayStr = today.toISOString().slice(0, 10);
     const yesterday = new Date(today);
     yesterday.setDate(today.getDate() - 1);
-    const yesterdayStr = yesterday.toISOString().slice(0, 10);
-
     const endFuture = new Date(today);
     endFuture.setDate(today.getDate() + 15);
 
     const startPastStr = startPast.toISOString().slice(0, 10);
+    const yesterdayStr = yesterday.toISOString().slice(0, 10);
+    const todayStr = today.toISOString().slice(0, 10);
     const endFutureStr = endFuture.toISOString().slice(0, 10);
-
 
     const cacheKey = `${lat}-${lng}-${startPastStr}-${endFutureStr}`;
     if (tempCache.current.has(cacheKey)) {
@@ -51,19 +46,12 @@ const PolygonUpdater = () => {
       const pastData = await pastRes.json();
       const futureData = await futureRes.json();
 
-      console.log(pastData);
-      console.log(futureData)
-
       const allTime = [...(pastData.hourly?.time ?? []), ...(futureData.hourly?.time ?? [])];
       const allValues = [...(pastData.hourly?.temperature_2m ?? []), ...(futureData.hourly?.temperature_2m ?? [])];
 
       if (allTime.length === 0 || allValues.length === 0) return null;
 
-      const entry: TempCacheEntry = {
-        time: allTime,
-        values: allValues,
-      };
-
+      const entry: TempCacheEntry = { time: allTime, values: allValues };
       tempCache.current.set(cacheKey, entry);
       return entry;
     } catch (err) {
@@ -74,19 +62,36 @@ const PolygonUpdater = () => {
 
   const evaluateRule = (value: number): string => {
     for (const rule of rules) {
-      if (value >= rule.min && value < rule.max) {
-        return rule.color;
-      }
+      if (value >= rule.min && value < rule.max) return rule.color;
     }
-    return '#888'; // fallback
+    return '#888';
+  };
+
+  const computeAverageTemperature = (
+    timestamps: string[],
+    temps: number[],
+    dateStart: string,
+    dateEnd: string,
+    timeStart: string,
+    timeEnd: string
+  ): number | null => {
+    const pad = (s: string | number) => String(s).padStart(2, '0');
+    const start = new Date(`${dateStart}T${pad(timeStart)}:00`).getTime();
+    const end = new Date(`${dateEnd}T${pad(timeEnd)}:00`).getTime();
+
+    const valuesInRange = timestamps
+      .map((t, i) => ({ time: new Date(t).getTime(), value: temps[i] }))
+      .filter(({ time }) => time >= start && time <= end)
+      .map(({ value }) => value);
+
+    if (valuesInRange.length === 0) return null;
+
+    const avg = valuesInRange.reduce((a, b) => a + b, 0) / valuesInRange.length;
+    return Number(avg.toFixed(2));
   };
 
   useEffect(() => {
-    if (!selectedDate || selectedTime === null) return;
-
-    const isoTime = `${selectedDate}T${selectedTime}`;
-    const hourStr = isoTime.slice(0, 13); // still fine for matching "YYYY-MM-DDTHH"
-
+    if (!selectedDateRange || !selectedTimeRange) return;
 
     const update = async () => {
       for (const polygon of polygons) {
@@ -95,35 +100,47 @@ const PolygonUpdater = () => {
         const cached = await fetchFull30DaySeries(lat, lng);
         if (!cached) continue;
 
-        const index = cached.time.findIndex((t) => t.startsWith(hourStr));
-        if (index === -1) {
-          console.warn(`Hour not found: ${hourStr} in cached data`);
-          continue;
-        }
+        const average = computeAverageTemperature(
+          cached.time,
+          cached.values,
+          selectedDateRange[0],
+          selectedDateRange[1],
+          selectedTimeRange[0],
+          selectedTimeRange[1]
+        );
 
-        const value = cached.values[index];
-        const color = evaluateRule(value);
+        if (average == null) continue;
+
+        const color = evaluateRule(average);
 
         const temperatureSeries = cached.time.map((t, i) => ({
           time: t,
           value: cached.values[i],
         }));
 
-        const needsUpdate =
-          polygon.currentValue !== value ||
-          polygon.currentColor !== color ||
-          polygon.time !== isoTime ||
+        const seriesChanged =
           !polygon.temperatureSeries ||
-          polygon.temperatureSeries.length !== cached.time.length;
+          polygon.temperatureSeries.length !== temperatureSeries.length ||
+          polygon.temperatureSeries.some((entry, i) =>
+            entry.time !== temperatureSeries[i].time || entry.value !== temperatureSeries[i].value
+          );
+
+        const needsUpdate =
+          polygon.currentValue !== average ||
+          polygon.currentColor !== color ||
+          seriesChanged;
 
         if (needsUpdate) {
           dispatch(updatePolygon({
             id: polygon.id,
             updates: {
-              currentValue: value,
+              currentValue: average,
               currentColor: color,
-              time: isoTime,
               temperatureSeries,
+              timeRange: {
+                start: `${selectedDateRange[0]}T${selectedTimeRange[0]}:00`,
+                end: `${selectedDateRange[1]}T${selectedTimeRange[1]}:00`,
+              },
             },
           }));
         }
@@ -131,8 +148,7 @@ const PolygonUpdater = () => {
     };
 
     update();
-
-  }, [selectedDate, selectedTime, polygons, rules, dispatch]);
+  }, [selectedDateRange, selectedTimeRange, polygons, rules, dispatch]);
 
   return null;
 };

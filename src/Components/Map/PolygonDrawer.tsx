@@ -4,7 +4,7 @@ import L, { Polygon as LeafletPolygon } from 'leaflet';
 import 'leaflet-draw';
 import { useDispatch, useSelector } from 'react-redux';
 import { addPolygon, deletePolygon } from '../../store/polygonsSlice';
-import type { RootState } from '../../store/index';
+import type { RootState } from '../../store';
 import { v4 as uuidv4 } from 'uuid';
 
 type LatLng = { lat: number; lng: number };
@@ -18,7 +18,6 @@ const getCentroid = (coords: LatLng[]): LatLng => {
     },
     { lat: 0, lng: 0 }
   );
-
   return {
     lat: total.lat / coords.length,
     lng: total.lng / coords.length,
@@ -28,26 +27,20 @@ const getCentroid = (coords: LatLng[]): LatLng => {
 const PolygonDrawer: React.FC = () => {
   const map = useMap();
   const dispatch = useDispatch();
-
-  const selectedDate = useSelector((state: RootState) => state.timeline.selectedDate);
   const polygons = useSelector((state: RootState) => state.polygons.list);
+  const { selectedDateRange, selectedTimeRange } = useSelector((state: RootState) => state.timeline);
 
-  const drawnItemsRef = useRef<L.FeatureGroup | null>(null);
+  const drawnItemsRef = useRef<L.FeatureGroup>(new L.FeatureGroup());
+  const polygonLayerMap = useRef<Map<string, L.Polygon>>(new Map());
 
   useEffect(() => {
     if (!map) return;
 
-    const drawnItems = new L.FeatureGroup();
-    drawnItemsRef.current = drawnItems;
+    const drawnItems = drawnItemsRef.current;
     map.addLayer(drawnItems);
 
     const drawControl = new L.Control.Draw({
       draw: {
-        polyline: false,
-        rectangle: false,
-        circle: false,
-        marker: false,
-        circlemarker: false,
         polygon: {
           allowIntersection: true,
           showArea: true,
@@ -60,6 +53,11 @@ const PolygonDrawer: React.FC = () => {
           guidelineDistance: 10,
           maxPoints: 12,
         },
+        polyline: false,
+        rectangle: false,
+        circle: false,
+        marker: false,
+        circlemarker: false,
       },
       edit: {
         featureGroup: drawnItems,
@@ -70,7 +68,7 @@ const PolygonDrawer: React.FC = () => {
 
     map.addControl(drawControl);
 
-    map.on(L.Draw.Event.CREATED, (event: any) => {
+    const onCreate = (event: any) => {
       const layer = event.layer as LeafletPolygon;
       const latlngs = layer.getLatLngs();
 
@@ -82,67 +80,115 @@ const PolygonDrawer: React.FC = () => {
           return;
         }
 
-        drawnItems.addLayer(layer);
-
-        const coords = points.map((point) => ({ lat: point.lat, lng: point.lng }));
+        const coords = points.map((p) => ({ lat: p.lat, lng: p.lng }));
         const centroid = getCentroid(coords);
-        const polygonId = uuidv4();
-        (layer as any).polygonId = polygonId;
+        const id = uuidv4();
 
-        const payload: any = {
-          id: polygonId,
-          coordinates: coords,
-          centroid,
-          dataSource: 'open-meteo',
-          variable: 'temperature',
-          rules: [],
-        };
+        // ✅ Set ID on layer and add to drawnItems so it's deletable
+        (layer as any).polygonId = id;
+        drawnItemsRef.current.addLayer(layer); // ⬅️ Important!
 
-       
+        // ✅ Add tooltip directly so it's visible immediately
+        layer.bindTooltip(
+          `<div style="font-size: 12px; font-weight: bold;">ID: ${id.slice(0, 6)}</div>`,
+          {
+            sticky: true,
+            direction: 'top',
+            offset: L.point(0, -12),
+            permanent: false, // make it always visible if you want
+            opacity: 0.9,
+          }
+        );
 
-        dispatch(addPolygon(payload));
-      } else {
-        alert('Invalid polygon shape.');
+
+        // 🧠 Now sync with Redux (don't add again in effect!)
+        dispatch(
+          addPolygon({
+            id,
+            coordinates: coords,
+            centroid,
+            dataSource: 'open-meteo',
+            variable: 'temperature',
+            rules: [],
+            timeRange: {
+              start: `${selectedDateRange[0]}T${selectedTimeRange[0]}:00`,
+              end: `${selectedDateRange[1]}T${selectedTimeRange[1]}:00`,
+            },
+          })
+        );
       }
-    });
+    };
 
-    map.on(L.Draw.Event.DELETED, (e: any) => {
-      const layers = e.layers;
 
-      layers.eachLayer((layer: any) => {
-        const polygonId = layer.polygonId;
 
-        if (polygonId) {
-          dispatch(deletePolygon(polygonId));
+    const onDelete = (e: any) => {
+      e.layers.eachLayer((layer: any) => {
+        const id = layer.polygonId;
+        if (id) {
+          dispatch(deletePolygon(id));
+          drawnItems.removeLayer(layer);
+          polygonLayerMap.current.delete(id);
         }
-
-        drawnItems.removeLayer(layer);
       });
-    });
+    };
+
+    // ✅ Register
+    map.on(L.Draw.Event.CREATED, onCreate);
+    map.on(L.Draw.Event.DELETED, onDelete);
 
     return () => {
+      // 🧹 Clean up listeners before re-adding
+      map.off(L.Draw.Event.CREATED, onCreate);
+      map.off(L.Draw.Event.DELETED, onDelete);
       map.removeControl(drawControl);
+      map.removeLayer(drawnItems);
     };
-  }, [map, dispatch, selectedDate]);
+  }, [map, dispatch, selectedDateRange, selectedTimeRange]);
 
-  // 🔁 Sync polygons from Redux to map
+
   useEffect(() => {
     const drawnItems = drawnItemsRef.current;
     if (!drawnItems) return;
 
-    drawnItems.clearLayers(); // remove previous polygons
+    const existingIds = new Set<string>();
+    drawnItems.eachLayer((layer: any) => {
+      if (layer.polygonId) {
+        existingIds.add(layer.polygonId);
+      }
+    });
 
+    // Add only missing ones
     polygons.forEach((polygon) => {
-      const latlngs = polygon.coordinates.map((pt) => [pt.lat, pt.lng]) as [number, number][];
+      if (existingIds.has(polygon.id)) return;
+
+      const latlngs = polygon.coordinates.map(pt => [pt.lat, pt.lng]) as [number, number][];
       const layer = L.polygon(latlngs, {
-        color: '#0077ff',
+        color: polygon.currentColor || '#0077ff',
         weight: 2,
         fillOpacity: 0.4,
       });
+
       (layer as any).polygonId = polygon.id;
+
+      layer.bindTooltip(
+        `<div style="font-size: 12px; font-weight: bold;">ID: ${polygon.id.slice(0, 6)}</div>`,
+        {
+          sticky: true,
+          direction: 'top',
+          offset: L.point(0, -12),
+          permanent: false, // make it always visible if you want
+          opacity: 0.9,
+        }
+      );
+
+
       drawnItems.addLayer(layer);
     });
   }, [polygons]);
+
+
+
+
 
   return null;
 };
