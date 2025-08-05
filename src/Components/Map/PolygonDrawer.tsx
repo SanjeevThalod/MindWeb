@@ -24,6 +24,12 @@ const getCentroid = (coords: LatLng[]): LatLng => {
   };
 };
 
+const padTime = (time: string): string => {
+  const [h, m = '00'] = time.split(':');
+  return `${h.padStart(2, '0')}:${m.padStart(2, '0')}`;
+};
+
+
 const PolygonDrawer: React.FC = () => {
   const map = useMap();
   const dispatch = useDispatch();
@@ -111,9 +117,10 @@ const PolygonDrawer: React.FC = () => {
             variable: 'temperature',
             rules: [],
             timeRange: {
-              start: `${selectedDateRange[0]}T${selectedTimeRange[0]}:00`,
-              end: `${selectedDateRange[1]}T${selectedTimeRange[1]}:00`,
-            },
+              start: `${selectedDateRange[0]}T${padTime(selectedTimeRange[0])}`,
+              end: `${selectedDateRange[1]}T${padTime(selectedTimeRange[1])}`,
+            }
+            ,
           })
         );
       }

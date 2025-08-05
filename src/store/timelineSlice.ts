@@ -8,7 +8,9 @@ interface TimelineState {
 
 const today = new Date();
 const defaultDate = today.toISOString().split('T')[0];
-const defaultTime = `${today.getHours()}:00`;
+const pad = (n: number) => n.toString().padStart(2, '0');
+const defaultTime = `${pad(today.getHours())}:00`;
+
 
 const initialState: TimelineState = {
   selectedDateRange: [defaultDate, defaultDate],
